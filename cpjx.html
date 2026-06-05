@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天机 V3.1 - 全息车牌阵列解码</title>
+    <style>
+        :root {
+            --bg-color: #030712;
+            --cyan: #00f0ff;
+            --gold: #fbbf24;
+            --red: #ff003c;
+            --green: #10b981;
+            --panel-bg: rgba(17, 24, 39, 0.7);
+            --border-glow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "JetBrains Mono", Consolas, "PingFang SC", sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.05) 0%, transparent 70%),
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 20px 20px, 20px 20px;
+        }
+
+        .container { width: 100%; max-width: 650px; }
+
+        /* 标题区 */
+        .header { text-align: center; margin-bottom: 2rem; position: relative; }
+        .header h1 { font-size: 2.2rem; color: var(--cyan); letter-spacing: 6px; text-shadow: var(--border-glow); text-transform: uppercase; font-weight: 300;}
+        .header p { font-size: 0.8rem; color: #64748b; letter-spacing: 4px; margin-top: 5px; }
+
+        /* 输入区 */
+        .input-box {
+            display: flex;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            border-radius: 4px;
+            padding: 5px;
+            box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.1);
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .input-box::after {
+            content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,240,255,0.2), transparent);
+            animation: scan 3s linear infinite;
+        }
+
+        @keyframes scan { 100% { left: 200%; } }
+
+        .region-select { background: transparent; color: var(--gold); border: none; font-size: 1.5rem; padding: 0.5rem 1rem; outline: none; border-right: 1px solid rgba(0,240,255,0.2); }
+        .region-select option { background: #000; }
+        .plate-input { flex: 1; background: transparent; border: none; padding: 0.5rem 1rem; font-size: 1.8rem; color: #fff; letter-spacing: 5px; text-transform: uppercase; outline: none; text-shadow: 0 0 5px rgba(255,255,255,0.5);}
+
+        .btn {
+            width: 100%; background: transparent; color: var(--cyan); border: 1px solid var(--cyan);
+            padding: 1rem; font-size: 1.1rem; letter-spacing: 4px; cursor: pointer; text-transform: uppercase;
+            transition: all 0.3s; position: relative; overflow: hidden;
+        }
+        .btn:hover { background: rgba(0, 240, 255, 0.1); box-shadow: 0 0 20px rgba(0, 240, 255, 0.4); }
+        
+        /* 加载打字机 */
+        .terminal { display: none; margin: 2rem 0; font-size: 0.85rem; color: #10b981; line-height: 1.8; text-shadow: 0 0 5px rgba(16, 185, 129, 0.5); }
+        .cursor { display: inline-block; width: 8px; height: 15px; background: #10b981; animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 2px;}
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* 结果面板 */
+        .dashboard { display: none; animation: fadeIn 1s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 逐字排盘阵列 */
+        .section-title { font-size: 0.9rem; color: #94a3b8; letter-spacing: 3px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin: 2rem 0 1rem 0; display: flex; justify-content: space-between; align-items: flex-end;}
+        .section-title span.en { color: var(--cyan); font-size: 0.7rem; }
+
+        .char-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 10px; }
+        
+        .char-card {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            padding: 1rem 0.5rem;
+            text-align: center;
+            position: relative;
+            transition: transform 0.3s, border-color 0.3s;
+        }
+        .char-card:hover { transform: translateY(-5px); border-color: var(--cyan); box-shadow: 0 5px 15px rgba(0,240,255,0.2); }
+        
+        .c-value { font-size: 2.5rem; font-weight: bold; color: #fff; line-height: 1; margin-bottom: 10px; }
+        .c-element { font-size: 0.8rem; padding: 2px 8px; border-radius: 12px; display: inline-block; margin-bottom: 8px; border: 1px solid; }
+        .c-desc { font-size: 0.7rem; color: #94a3b8; }
+        .c-type { font-size: 0.65rem; color: #64748b; margin-top: 5px; letter-spacing: 1px; }
+
+        /* 元素颜色主题 */
+        .el-水 { color: #3b82f6; border-color: #3b82f6; background: rgba(59,130,246,0.1); }
+        .el-火 { color: #ef4444; border-color: #ef4444; background: rgba(239,68,68,0.1); }
+        .el-木 { color: #10b981; border-color: #10b981; background: rgba(16,185,129,0.1); }
+        .el-金 { color: #f59e0b; border-color: #f59e0b; background: rgba(245,158,11,0.1); }
+        .el-土 { color: #8b5cf6; border-color: #8b5cf6; background: rgba(139,92,246,0.1); }
+
+        /* 整体总结面板 */
+        .summary-panel {
+            background: var(--panel-bg);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 2rem 1.5rem;
+            margin-top: 1rem;
+            border-left: 3px solid var(--cyan);
+            position: relative;
+        }
+        .summary-panel::after { content:''; position: absolute; right:0; bottom:0; width:20px; height:20px; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+
+        .s-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1.5rem;}
+        .s-score-box { text-align: left; }
+        .s-score { font-size: 4rem; color: var(--gold); line-height: 1; font-weight: bold; text-shadow: 0 0 20px rgba(251, 191, 36, 0.3); }
+        .s-label { font-size: 0.7rem; color: var(--cyan); letter-spacing: 2px; text-transform: uppercase; margin-top: 5px;}
+        .s-keyword { font-size: 1.8rem; font-weight: bold; letter-spacing: 8px; color: #fff; text-align: right; }
+
+        .report-section { margin-bottom: 1.2rem; }
+        .r-title { font-size: 0.75rem; color: var(--cyan); letter-spacing: 2px; margin-bottom: 0.5rem; text-transform: uppercase; display: flex; align-items: center; }
+        .r-title::before { content: '>'; margin-right: 8px; color: var(--gold); }
+        .s-text { font-size: 0.95rem; line-height: 1.8; color: #cbd5e1; text-align: justify;}
+        
+        .highlight { color: var(--gold); font-weight: bold; }
+        .h-cyan { color: var(--cyan); font-weight: bold; }
+        .h-red { color: var(--red); font-weight: bold; }
+
+        .s-tags { margin-top: 1.5rem; display: flex; gap: 10px; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05);}
+        .s-tag { font-size: 0.75rem; padding: 4px 10px; background: rgba(0,0,0,0.5); border: 1px solid #334155; color: var(--cyan); }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Oracle Matrix</h1>
+        <p>全息基因逐字拆解引擎 V3.1</p>
+    </div>
+
+    <div class="input-box">
+        <select class="region-select" id="region">
+            <option value="京">京</option><option value="沪">沪</option><option value="粤" selected>粤</option>
+            <option value="津">津</option><option value="浙">浙</option><option value="苏">苏</option><option value="川">川</option>
+        </select>
+        <input type="text" id="plate" class="plate-input" placeholder="输入车牌号码" maxlength="7" autocomplete="off">
+    </div>
+    
+    <button class="btn" id="runBtn" onclick="startDecode()">启动深层多维解码</button>
+
+    <div class="terminal" id="terminal">
+        <div id="termText"></div>
+    </div>
+
+    <div class="dashboard" id="dashboard">
+        
+        <div class="section-title">
+            <span>微观刻画：逐字基因测序</span>
+            <span class="en">MICRO-ANALYSIS</span>
+        </div>
+        <div class="char-grid" id="charGrid"></div>
+
+        <div class="section-title">
+            <span>宏观收束：全息深度报告</span>
+            <span class="en">MACRO-REPORT</span>
+        </div>
+        <div class="summary-panel">
+            <div class="s-header">
+                <div class="s-score-box">
+                    <div class="s-score" id="resScore">--</div>
+                    <div class="s-label">全息共振指数 (Resonance)</div>
+                </div>
+                <div class="s-keyword" id="resKeyword">----</div>
+            </div>
+            
+            <div id="resSummaryContent">
+                </div>
+
+            <div class="s-tags" id="resTags"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('plate').addEventListener('input', function(e) {
+        this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+
+    const charToNum = char => {
+        if (!isNaN(char)) return parseInt(char);
+        const code = char.charCodeAt(0) - 64; 
+        return code % 9 === 0 ? 9 : code % 9;
+    };
+
+    const wuxingDict = {
+        0: { el: '土', type: '守成', desc: '厚土承载' },
+        1: { el: '水', type: '流转', desc: '上善若水' },
+        2: { el: '火', type: '破局', desc: '烈火燎原' },
+        3: { el: '木', type: '生息', desc: '巨木成林' },
+        4: { el: '金', type: '秩序', desc: '坚金护盾' },
+        5: { el: '土', type: '根基', desc: '沉稳如山' },
+        6: { el: '水', type: '聚财', desc: '活水生财' },
+        7: { el: '火', type: '突进', desc: '星火耀目' },
+        8: { el: '木', type: '包容', desc: '枯木逢春' },
+        9: { el: '金', type: '权威', desc: '锋芒毕露' }
+    };
+
+    const baseElVibe = {
+        '金': '肃杀与秩序的绝对主宰。该阵列天然排斥轻浮与混沌，散发着极强的物理威压与不可侵犯的屏障感。',
+        '木': '生生不息的生长态矩阵。具有极高的环境包容度，能量温和而持久，如同城市路网中蔓延的有机脉络。',
+        '水': '上善若水的流体动力学巅峰。代表着财富的无摩擦流转与社交边界的消融，是最强的人脉与暗财触媒。',
+        '火': '极致爆裂的红移能量场。处于时刻准备点火的过载状态，具有撕裂平庸、高速跃迁的破局之力。',
+        '土': '绝对防御的重力锚点。这组阵列吞噬一切轻微的波动与灾厄，是承载家庭重任与极端生存环境的完美基石。'
+    };
+
+    const logs = [
+        "> 建立高维算力通道...",
+        "> 拦截基础特征码与 ASCII 阵列...",
+        "> 注入毕达哥拉斯转码协议...",
+        "> 剥离微观五行波段...",
+        "> 演算阴阳守恒与香农信息熵...",
+        "> 正在生成全息宏观深度报告..."
+    ];
+
+    async function typeWriter(lines, elId) {
+        const el = document.getElementById(elId);
+        el.innerHTML = '';
+        for (let line of lines) {
+            let p = document.createElement('div');
+            el.appendChild(p);
+            for (let char of line) {
+                p.innerHTML += char;
+                await new Promise(r => setTimeout(r, 15));
+            }
+            p.innerHTML += '<span class="cursor"></span>';
+            await new Promise(r => setTimeout(r, 200));
+            p.querySelector('.cursor').remove();
+        }
+    }
+
+    async function startDecode() {
+        const plate = document.getElementById('plate').value;
+        if(plate.length < 5) return alert("请载入完整的核心阵列");
+
+        document.getElementById('runBtn').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'none';
+        
+        const term = document.getElementById('terminal');
+        term.style.display = 'block';
+
+        await typeWriter(logs, 'termText');
+        
+        term.style.display = 'none';
+        document.getElementById('runBtn').style.display = 'block';
+        document.getElementById('runBtn').innerText = "重新阵列重构";
+        
+        buildDashboard(plate);
+    }
+
+    function buildDashboard(plate) {
+        const grid = document.getElementById('charGrid');
+        grid.innerHTML = '';
+        
+        let totalScore = 60; 
+        let elCounts = { '金':0, '木':0, '水':0, '火':0, '土':0 };
+        let charTypes = [];
+        let yinCount = 0; // 偶数
+        let yangCount = 0; // 奇数
+
+        // 1. 微观构建
+        for (let i = 0; i < plate.length; i++) {
+            const char = plate[i];
+            const num = charToNum(char);
+            const data = wuxingDict[num];
+            
+            elCounts[data.el]++;
+            charTypes.push(data.type);
+            totalScore += num; 
+            
+            num % 2 === 0 ? yinCount++ : yangCount++;
+
+            setTimeout(() => {
+                const card = document.createElement('div');
+                card.className = 'char-card';
+                card.innerHTML = `
+                    <div class="c-value">${char}</div>
+                    <div class="c-element el-${data.el}">${data.el}</div>
+                    <div class="c-desc">${data.desc}</div>
+                    <div class="c-type">[ ${data.type} ]</div>
+                `;
+                grid.appendChild(card);
+            }, i * 150); 
+        }
+
+        // 2. 宏观长文生成
+        setTimeout(() => {
+            // A. 计算核心
+            let mainEl = Object.keys(elCounts).reduce((a, b) => elCounts[a] > elCounts[b] ? a : b);
+            let scoreMod = Math.min(totalScore % 38 + 62, 99); 
+            let keyword = "稳态运行";
+
+            // B. 构筑四大段落报告
+            let reportHTML = "";
+
+            // --- 段落1：基底协议 (主导五行) ---
+            reportHTML += `
+            <div class="report-section">
+                <div class="r-title">I. 基底协议 (Core Element)</div>
+                <div class="s-text">系统对载入的基因片段进行了解码。宏观层面，该车牌阵列的底层物理规则被 <span class="highlight">[ ${mainEl} ] 属性</span> 绝对主导。它呈现出${baseElVibe[mainEl]}</div>
+            </div>`;
+
+            // --- 段落2：阴阳纠缠 (奇偶分析) ---
+            let yyDesc = "";
+            let yyRatio = Math.abs(yinCount - yangCount);
+            if (yyRatio <= 1) {
+                yyDesc = `阵列中的正负电子（奇偶数）分布达到了<span class="h-cyan">极其完美的坍缩平衡状态</span>。这种极致的阴阳咬合，赋予了车辆极高的机械平顺度，能天然化解外界路况的无序波动。`;
+            } else if (yinCount === 0) {
+                yyDesc = `极度罕见的<span class="h-red">纯阳暴走态</span>！序列剥离了所有阴性能量，带来了无与伦比的超车动能与进取心，但需警惕高能级运转带来的“路怒摩擦”。`;
+            } else if (yangCount === 0) {
+                yyDesc = `阵列进入了<span class="h-cyan">极阴沉渊态</span>。纯偶数的收敛特质构筑了绝对的静态防御，它几乎不主动散发攻击性磁场，是“隐身”于拥堵车流的最佳屏障。`;
+            } else {
+                yyDesc = `阴阳粒子呈现不对称分布，偏向于${yinCount > yangCount ? '防守收敛 (阴)' : '外放射频 (阳)'}。磁场具有明确的倾向性。`;
+            }
+            reportHTML += `
+            <div class="report-section">
+                <div class="r-title">II. 阴阳纠缠 (Yin-Yang Dynamics)</div>
+                <div class="s-text">${yyDesc}</div>
+            </div>`;
+
+            // --- 段落3：拓扑变异 (形态学) ---
+            let topoDesc = "未检测到极端的空间折叠，波段呈现出大隐隐于市的日常黄金稳态，不招惹无关因果。";
+            let isSmooth = /(123|234|345|456|567|678|789)/.test(plate) || /(A.*B.*C)/.test(plate);
+            let isRepeat = /(.)\1{2,}/.test(plate);
+            
+            if (isRepeat) {
+                scoreMod = Math.min(scoreMod + 15, 99);
+                keyword = "破局之龙";
+                topoDesc = `系统警报：检测到<span class="h-red">高频同频重叠（叠号畸变）</span>。这在数字拓扑学中意味着极强的能量穿透力。此车自带降维打击的社交引力场，极为霸道。`;
+            } else if (isSmooth) {
+                scoreMod = Math.min(scoreMod + 12, 98);
+                keyword = "青云直上";
+                topoDesc = `观测到<span class="highlight">顺滑的阶梯矩阵（顺子结构）</span>。底层逻辑呈现高度通畅的矢量向上趋势，代表着车主的生活与事业正处于强劲的上升波段，一路绿灯。`;
+            } else if (plate.includes('4')) {
+                scoreMod += 2;
+                topoDesc = `观测到特殊折叠音节 '4'。在此阵列引擎中，它发生了相变，形成<span class="highlight">“触底反弹”</span>的引力弹弓效应，能有效吸收并转化外界煞气。`;
+            }
+
+            reportHTML += `
+            <div class="report-section">
+                <div class="r-title">III. 拓扑变异 (Topology Mutation)</div>
+                <div class="s-text">${topoDesc}</div>
+            </div>`;
+
+            // --- 段落4：全息驾驶潜能 (建议) ---
+            let driveDesc = "";
+            if (mainEl === '火' || mainEl === '金' || yangCount > yinCount) {
+                driveDesc = "【适宜画像】此车犹如锋利的开山刀。最匹配正处于事业开拓期、需要频繁进行高强度商务突围的“破局者”。<br>【安全协议】建议车主克制急加速冲动，车内宜播放冷爵士或轻音乐以中和狂躁电波。";
+            } else {
+                driveDesc = "【适宜画像】此车犹如厚重的移动堡垒。极度匹配注重家庭出行、向往岁月静好与长线积累的“守护者”。<br>【安全协议】车辆极少发生剧烈故障，按时进行常规保养即可维持其满级防御力。";
+            }
+
+            reportHTML += `
+            <div class="report-section">
+                <div class="r-title">IV. 驾驶者映射 (Driver Profiling)</div>
+                <div class="s-text">${driveDesc}</div>
+            </div>`;
+
+            // 更新 UI
+            document.getElementById('resScore').innerText = scoreMod;
+            document.getElementById('resKeyword').innerText = keyword;
+            document.getElementById('resSummaryContent').innerHTML = reportHTML;
+            
+            // Tags
+            const uniqueTypes = [...new Set(charTypes)].slice(0, 4);
+            document.getElementById('resTags').innerHTML = uniqueTypes.map(t => `<span class="s-tag">微观词条: ${t}</span>`).join('');
+
+            document.getElementById('dashboard').style.display = 'block';
+        }, plate.length * 150 + 400);
+    }
+</script>
+
+</body>
+</html>

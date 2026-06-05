@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2048 网页版</title>
+    <style>
+        :root {
+            --bg-color: #faf8ef;
+            --grid-bg: #bbada0;
+            --cell-bg: #ccc0b3;
+            --text-color: #776e65;
+            --text-light: #f9f6f2;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            touch-action: none; /* 防止移动端滑动屏幕时触发页面滚动 */
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin: 0;
+            font-weight: bold;
+        }
+
+        .score-container {
+            background: var(--grid-bg);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .score-container span {
+            display: block;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #eee4da;
+            margin-bottom: 4px;
+        }
+
+        .game-board {
+            background-color: var(--grid-bg);
+            padding: 10px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .cell {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: var(--cell-bg);
+            border-radius: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: var(--text-color);
+            transition: all 0.15s ease-in-out;
+        }
+
+        /* 颜色映射 */
+        .cell[data-val="2"] { background: #eee4da; }
+        .cell[data-val="4"] { background: #ede0c8; }
+        .cell[data-val="8"] { background: #f2b179; color: var(--text-light); }
+        .cell[data-val="16"] { background: #f59563; color: var(--text-light); }
+        .cell[data-val="32"] { background: #f67c5f; color: var(--text-light); }
+        .cell[data-val="64"] { background: #f65e3b; color: var(--text-light); }
+        .cell[data-val="128"] { background: #edcf72; color: var(--text-light); font-size: 28px; }
+        .cell[data-val="256"] { background: #edcc61; color: var(--text-light); font-size: 28px; }
+        .cell[data-val="512"] { background: #edc850; color: var(--text-light); font-size: 28px; }
+        .cell[data-val="1024"] { background: #edc53f; color: var(--text-light); font-size: 24px; }
+        .cell[data-val="2048"] { background: #edc22e; color: var(--text-light); font-size: 24px; box-shadow: 0 0 10px 4px rgba(243, 215, 116, 0.4); }
+
+        .game-over {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(238, 228, 218, 0.73);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            z-index: 10;
+            display: none;
+        }
+
+        .game-over h2 {
+            font-size: 40px;
+            margin-bottom: 20px;
+            color: var(--text-color);
+        }
+
+        button {
+            background-color: #8f7a66;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #9f8b77;
+        }
+        
+        .instructions {
+            margin-top: 20px;
+            max-width: 400px;
+            line-height: 1.6;
+            color: #8f7a66;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>2048</h1>
+        <div class="score-container">
+            <span>Score</span>
+            <div id="score">0</div>
+        </div>
+    </div>
+
+    <div class="game-board" id="board">
+        <div class="game-over" id="gameOver">
+            <h2>游戏结束!</h2>
+            <button onclick="initGame()">再玩一次</button>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <strong>玩法说明：</strong><br>
+        电脑端：使用 <b>键盘方向键</b> 或 <b>W/A/S/D</b> 移动方块。<br>
+        手机端：在游戏区域 <b>滑动屏幕</b> 移动方块。<br>
+        每次移动，相同的数字会合并并翻倍，努力合成出 2048 吧！
+    </div>
+
+    <script>
+        const boardEl = document.getElementById('board');
+        const scoreEl = document.getElementById('score');
+        const gameOverEl = document.getElementById('gameOver');
+        let board = [];
+        let score = 0;
+        let cells = [];
+
+        // 初始化游戏
+        function initGame() {
+            board = [...Array(4)].map(() => Array(4).fill(0));
+            score = 0;
+            updateScore(0);
+            gameOverEl.style.display = 'none';
+            
+            // 清理旧DOM
+            const existingCells = document.querySelectorAll('.cell');
+            existingCells.forEach(c => c.remove());
+            cells = [];
+
+            // 生成格子DOM
+            for (let i = 0; i < 16; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                boardEl.appendChild(cell);
+                cells.push(cell);
+            }
+
+            addRandomTile();
+            addRandomTile();
+            renderBoard();
+        }
+
+        function addRandomTile() {
+            let emptyCells = [];
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (board[r][c] === 0) emptyCells.push({r, c});
+                }
+            }
+            if (emptyCells.length > 0) {
+                let randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                board[randomCell.r][randomCell.c] = Math.random() < 0.9 ? 2 : 4;
+            }
+        }
+
+        function renderBoard() {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    let val = board[r][c];
+                    let idx = r * 4 + c;
+                    cells[idx].textContent = val > 0 ? val : '';
+                    if(val > 0) {
+                        cells[idx].setAttribute('data-val', val);
+                    } else {
+                        cells[idx].removeAttribute('data-val');
+                    }
+                }
+            }
+        }
+
+        function updateScore(add) {
+            score += add;
+            scoreEl.textContent = score;
+        }
+
+        // 核心移动逻辑：处理单行/单列的合并
+        function operate(row) {
+            row = row.filter(val => val !== 0); // 移除0
+            for (let i = 0; i < row.length - 1; i++) {
+                if (row[i] === row[i + 1]) {
+                    row[i] *= 2;
+                    updateScore(row[i]);
+                    row[i + 1] = 0;
+                }
+            }
+            row = row.filter(val => val !== 0); // 再次移除合并后产生的0
+            while (row.length < 4) row.push(0); // 补齐
+            return row;
+        }
+
+        function moveLeft() {
+            let moved = false;
+            for (let r = 0; r < 4; r++) {
+                let row = board[r];
+                let newRow = operate(row);
+                if (row.join(',') !== newRow.join(',')) moved = true;
+                board[r] = newRow;
+            }
+            return moved;
+        }
+
+        function moveRight() {
+            let moved = false;
+            for (let r = 0; r < 4; r++) {
+                let row = board[r].slice().reverse();
+                let newRow = operate(row).reverse();
+                if (board[r].join(',') !== newRow.join(',')) moved = true;
+                board[r] = newRow;
+            }
+            return moved;
+        }
+
+        function moveUp() {
+            let moved = false;
+            for (let c = 0; c < 4; c++) {
+                let col = [board[0][c], board[1][c], board[2][c], board[3][c]];
+                let newCol = operate(col);
+                for (let r = 0; r < 4; r++) {
+                    if (board[r][c] !== newCol[r]) moved = true;
+                    board[r][c] = newCol[r];
+                }
+            }
+            return moved;
+        }
+
+        function moveDown() {
+            let moved = false;
+            for (let c = 0; c < 4; c++) {
+                let col = [board[3][c], board[2][c], board[1][c], board[0][c]];
+                let newCol = operate(col).reverse();
+                for (let r = 0; r < 4; r++) {
+                    if (board[r][c] !== newCol[r]) moved = true;
+                    board[r][c] = newCol[r];
+                }
+            }
+            return moved;
+        }
+
+        function checkGameOver() {
+            // 检查是否有空格
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (board[r][c] === 0) return false;
+                }
+            }
+            // 检查是否有相邻可合并
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (c < 3 && board[r][c] === board[r][c + 1]) return false;
+                    if (r < 3 && board[r][c] === board[r + 1][c]) return false;
+                }
+            }
+            return true;
+        }
+
+        function handleMove(direction) {
+            let moved = false;
+            switch (direction) {
+                case 'Left': moved = moveLeft(); break;
+                case 'Right': moved = moveRight(); break;
+                case 'Up': moved = moveUp(); break;
+                case 'Down': moved = moveDown(); break;
+            }
+            
+            if (moved) {
+                addRandomTile();
+                renderBoard();
+                if (checkGameOver()) {
+                    setTimeout(() => { gameOverEl.style.display = 'flex'; }, 300);
+                }
+            }
+        }
+
+        // 键盘事件监听
+        document.addEventListener('keydown', (e) => {
+            const keys = {
+                'ArrowUp': 'Up', 'w': 'Up', 'W': 'Up',
+                'ArrowDown': 'Down', 's': 'Down', 'S': 'Down',
+                'ArrowLeft': 'Left', 'a': 'Left', 'A': 'Left',
+                'ArrowRight': 'Right', 'd': 'Right', 'D': 'Right'
+            };
+            if (keys[e.key]) {
+                e.preventDefault(); // 防止网页滚动
+                handleMove(keys[e.key]);
+            }
+        });
+
+        // 触摸滑动事件监听 (适配手机端)
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        boardEl.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            e.preventDefault(); // 防止双击放大等默认行为
+        }, { passive: false });
+
+        boardEl.addEventListener('touchend', (e) => {
+            if (!touchStartX || !touchStartY) return;
+            let touchEndX = e.changedTouches[0].clientX;
+            let touchEndY = e.changedTouches[0].clientY;
+
+            let dx = touchEndX - touchStartX;
+            let dy = touchEndY - touchStartY;
+            let absDx = Math.abs(dx);
+            let absDy = Math.abs(dy);
+
+            // 必须滑动超过 30 像素才触发，防止误触
+            if (Math.max(absDx, absDy) > 30) {
+                if (absDx > absDy) {
+                    handleMove(dx > 0 ? 'Right' : 'Left');
+                } else {
+                    handleMove(dy > 0 ? 'Down' : 'Up');
+                }
+            }
+            touchStartX = 0;
+            touchStartY = 0;
+        });
+
+        // 启动游戏
+        initGame();
+    </script>
+</body>
+</html>
