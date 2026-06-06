@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="-webkit-text-size-adjust" content="100%">
+    <title>复利的奇迹</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg-page: #f8fafc;        
+            --bg-surface: #ffffff;
+            --text-primary: #0f172a;   
+            --text-secondary: #64748b; 
+            --input-bg: #f1f5f9;
+            --border-light: #e2e8f0;
+            --primary-accent: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+            /* 消除移动端和微信中点击元素时产生的极丑的默认灰块 */
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px 15px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 1040px;
+            margin: 0 auto;
+            background: var(--bg-surface);
+            padding: 30px 35px;
+            border-radius: 24px;
+            box-shadow: 0 4px 24px rgba(15, 23, 42, 0.04);
+            border: 1px solid rgba(15, 23, 42, 0.01);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+        
+        .header h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            color: var(--text-primary);
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .input-group label {
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            padding-left: 2px;
+        }
+
+        /* 移除 iOS 微信/Safari 浏览器自带的输入框及下拉框立体内阴影和默认边框样式 */
+        .input-group input, .input-group select {
+            -webkit-appearance: none;
+            appearance: none;
+            padding: 12px 14px;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            font-size: 16px; /* 锁定16px：移动端的核心防自动放大机制 */
+            font-weight: 500;
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            width: 100%;
+        }
+
+        /* 为自定义样式后的 select 下拉菜单补上一个高级的右侧微型箭头指示器 */
+        .input-group.select-wrapper::after {
+            content: "";
+            position: absolute;
+            right: 14px;
+            bottom: 16px;
+            width: 8px;
+            height: 8px;
+            border-right: 2px solid var(--text-secondary);
+            border-bottom: 2px solid var(--text-secondary);
+            transform: rotate(45deg);
+            pointer-events: none;
+            transition: transform 0.2s ease;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--primary-accent); 
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+            background-color: var(--bg-surface);
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: var(--bg-surface);
+            padding: 20px 15px;
+            border-radius: 16px;
+            text-align: center;
+            border: 1px solid var(--border-light);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .card h3 {
+            margin: 0 0 6px 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .card .value {
+            font-size: 26px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+            font-feature-settings: "tnum"; 
+        }
+
+        .roi-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 8px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #ea580c; 
+            background-color: #fff7ed; 
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+
+        #chart {
+            width: 100%;
+            height: 480px;
+            margin-top: 10px;
+        }
+
+        /* ==========================================
+           极致精修的移动端及微信自适应媒体查询 (Max-Width: 600px)
+           ========================================== */
+        @media (max-width: 600px) {
+            body { 
+                padding: 10px 8px; /* 压缩外部留白以撑大主区域 */
+            }
+            .container { 
+                padding: 20px 12px; 
+                border-radius: 20px; 
+            }
+            .header { 
+                margin-bottom: 25px; 
+            }
+            .header h2 { 
+                font-size: 19px; 
+            }
+            .controls {
+                grid-template-columns: repeat(2, 1fr); /* 完美的2列对称网格 */
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+            /* 让定投频率下拉菜单单独横向占满整行，更符合单手触控直觉 */
+            .input-group.select-wrapper { 
+                grid-column: span 2; 
+            }
+            .input-group.select-wrapper::after {
+                bottom: 15px; /* 微调箭头在小屏幕下的上下居中 */
+            }
+            .input-group label { 
+                font-size: 12px; 
+                margin-bottom: 6px; 
+            }
+            .input-group input, .input-group select { 
+                padding: 10px 12px; 
+                font-size: 16px; /* 强力维持 16px，严防 iOS 微信聚焦放大 */
+                border-radius: 10px;
+            }
+            
+            /* 数据面板：等分 3 列锁定一行，收缩一切边距防止溢出 */
+            .summary { 
+                gap: 6px; 
+                margin-bottom: 15px; 
+            }
+            .card { 
+                padding: 12px 2px; 
+                border-radius: 12px; 
+            }
+            .card h3 { 
+                font-size: 11px; 
+                margin: 0 0 4px 0;
+                letter-spacing: -0.3px;
+            }
+            .card .value { 
+                font-size: 15px; /* 确保 "XXXX.XX万" 在320px等超窄屏幕下也绝不折行 */
+            }
+            .roi-badge { 
+                font-size: 10px; 
+                padding: 2px 5px; 
+                margin-top: 4px; 
+                letter-spacing: -0.2px;
+            }
+            #chart { 
+                height: 340px; /* 动态收缩手机端图表高度，使其在单屏内一眼收全 */
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>复利的奇迹</h2>
+    </div>
+
+    <div class="controls">
+        <div class="input-group">
+            <label>起始投入 (万元)</label>
+            <input type="number" id="initial" value="100" min="0" step="10" inputmode="decimal">
+        </div>
+        <div class="input-group">
+            <label>每年定投 (万元)</label>
+            <input type="number" id="annual" value="20" min="0" step="5" inputmode="decimal">
+        </div>
+        <div class="input-group select-wrapper">
+            <label>定投频率</label>
+            <select id="frequency">
+                <option value="1_mid">每年一次 (年中)</option>
+                <option value="12" selected>每月定投 (月末)</option>
+                <option value="52">每周定投 (周末)</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label>预期年化 (%)</label>
+            <input type="number" id="rate" value="10.0" step="0.1" inputmode="decimal">
+        </div>
+        <div class="input-group">
+            <label>投资年限 (年)</label>
+            <input type="number" id="years" value="25" min="1" max="100" inputmode="numeric">
+        </div>
+    </div>
+
+    <div class="summary">
+        <div class="card">
+            <h3>期末总资产</h3>
+            <div class="value" id="val-total">0.00 万</div>
+        </div>
+        <div class="card">
+            <h3>累计总本金</h3>
+            <div class="value" id="val-principal">0.00 万</div>
+        </div>
+        <div class="card">
+            <h3>累计复利收益</h3>
+            <div class="value" id="val-interest">0.00 万</div>
+            <div class="roi-badge" id="val-roi">+0.00%</div>
+        </div>
+    </div>
+
+    <div id="chart"></div>
+</div>
+
+<script>
+    // 初始化自适应 ECharts 实例
+    const chart = echarts.init(document.getElementById('chart'));
+
+    function formatCurrencyToWan(numInYuan) {
+        // 由于所有计算内部已还原为元，在此统一除以 10000 转化为纯“万”单位展示
+        return (numInYuan / 10000).toFixed(2) + ' 万';
+    }
+
+    function calculateAndDraw() {
+        // 从输入框取值（此时单位为万元），在底层换算引擎中乘以 10000 还原为“元”进行高精度复利运算
+        const initial = (parseFloat(document.getElementById('initial').value) || 0) * 10000;
+        const annualTotal = (parseFloat(document.getElementById('annual').value) || 0) * 10000;
+        const frequencyVal = document.getElementById('frequency').value;
+        const annualRate = parseFloat(document.getElementById('rate').value) / 100 || 0;
+        const years = parseInt(document.getElementById('years').value) || 0;
+
+        let xAxisData = [];
+        let seriesInitial = [];
+        let seriesSIP = [];
+        let seriesInterest = [];
+
+        let currentTotal = initial;
+        let currentSipPrincipal = 0;
+
+        xAxisData.push('第0年');
+        seriesInitial.push(initial);
+        seriesSIP.push(0);
+        seriesInterest.push(0);
+
+        if (frequencyVal === '1_mid') {
+            for (let y = 1; y <= years; y++) {
+                currentTotal = currentTotal * Math.pow(1 + annualRate, 0.5);
+                currentTotal += annualTotal;
+                currentSipPrincipal += annualTotal;
+                currentTotal = currentTotal * Math.pow(1 + annualRate, 0.5);
+
+                let totalPrincipal = initial + currentSipPrincipal;
+                let currentInterest = currentTotal - totalPrincipal;
+
+                xAxisData.push('第' + y + '年');
+                seriesInitial.push(initial);
+                seriesSIP.push(currentSipPrincipal);
+                seriesInterest.push(currentInterest > 0 ? currentInterest : 0);
+            }
+        } else {
+            const frequency = parseInt(frequencyVal) || 1;
+            const periodAmount = annualTotal / frequency;
+            const periodRate = Math.pow(1 + annualRate, 1 / frequency) - 1;
+
+            for (let y = 1; y <= years; y++) {
+                for (let p = 0; p < frequency; p++) {
+                    currentTotal = currentTotal * (1 + periodRate) + periodAmount;
+                    currentSipPrincipal += periodAmount;
+                }
+
+                let totalPrincipal = initial + currentSipPrincipal;
+                let currentInterest = currentTotal - totalPrincipal;
+
+                xAxisData.push('第' + y + '年');
+                seriesInitial.push(initial);
+                seriesSIP.push(currentSipPrincipal);
+                seriesInterest.push(currentInterest > 0 ? currentInterest : 0);
+            }
+        }
+
+        const finalTotal = currentTotal;
+        const finalPrincipal = initial + currentSipPrincipal;
+        const finalInterest = finalTotal - finalPrincipal;
+        
+        const roi = finalPrincipal > 0 ? ((finalInterest / finalPrincipal) * 100) : 0;
+
+        // 全面渲染顶层统一为“万”的数据卡片
+        document.getElementById('val-total').innerText = formatCurrencyToWan(finalTotal);
+        document.getElementById('val-principal').innerText = formatCurrencyToWan(finalPrincipal);
+        document.getElementById('val-interest').innerText = formatCurrencyToWan(finalInterest);
+        document.getElementById('val-roi').innerText = '收益率 +' + roi.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                borderColor: '#e2e8f0',
+                padding: [10, 14],
+                textStyle: { color: '#0f172a', fontSize: window.innerWidth < 600 ? 12 : 13 },
+                axisPointer: { type: 'line', lineStyle: { color: '#cbd5e1', type: 'dashed' } },
+                valueFormatter: (value) => formatCurrencyToWan(value),
+                extraCssText: 'box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06); border-radius: 8px;'
+            },
+            legend: {
+                data: ['初始本金', '累计定投本金', '累计复利收益'],
+                icon: 'circle',
+                itemWidth: 8,
+                itemHeight: 8,
+                itemGap: window.innerWidth < 600 ? 12 : 24,
+                textStyle: { color: '#64748b', fontSize: window.innerWidth < 600 ? 11 : 12 },
+                top: 0
+            },
+            grid: { 
+                left: '0%', right: '3%', bottom: '2%', top: '15%', containLabel: true 
+            },
+            xAxis: [
+                {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: xAxisData,
+                    axisLabel: { fontSize: 11, color: '#94a3b8', margin: 12 },
+                    axisLine: { show: false }, 
+                    axisTick: { show: false }
+                }
+            ],
+            yAxis: [
+                {
+                    type: 'value',
+                    axisLabel: {
+                        fontSize: 11, color: '#94a3b8',
+                        formatter: (value) => (value / 10000) + '万'
+                    },
+                    splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } }
+                }
+            ],
+            series: [
+                {
+                    name: '初始本金',
+                    type: 'line',
+                    stack: 'Total',
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 1.5, color: '#3b82f6' }, 
+                    areaStyle: { 
+                        opacity: 1,
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(59, 130, 246, 0.55)' },
+                            { offset: 1, color: 'rgba(59, 130, 246, 0.08)' }
+                        ])
+                    },
+                    data: seriesInitial,
+                    color: '#3b82f6'
+                },
+                {
+                    name: '累计定投本金',
+                    type: 'line',
+                    stack: 'Total',
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 1.5, color: '#0ea5e9' }, 
+                    areaStyle: { 
+                        opacity: 1,
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(14, 165, 233, 0.55)' },
+                            { offset: 1, color: 'rgba(14, 165, 233, 0.08)' }
+                        ])
+                    },
+                    data: seriesSIP,
+                    color: '#0ea5e9'
+                },
+                {
+                    name: '累计复利收益',
+                    type: 'line',
+                    stack: 'Total',
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 2, color: '#f97316' }, 
+                    areaStyle: { 
+                        opacity: 1,
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(249, 115, 22, 0.55)' },
+                            { offset: 1, color: 'rgba(249, 115, 22, 0.05)' }
+                        ])
+                    },
+                    data: seriesInterest,
+                    color: '#f97316'
+                }
+            ]
+        };
+
+        chart.setOption(option);
+    }
+
+    const inputs = document.querySelectorAll('input, select');
+    inputs.forEach(input => {
+        input.addEventListener('input', calculateAndDraw);
+        input.addEventListener('change', calculateAndDraw);
+    });
+
+    window.addEventListener('resize', () => {
+        chart.resize();
+        calculateAndDraw();
+    });
+
+    calculateAndDraw();
+</script>
+
+</body>
+</html>

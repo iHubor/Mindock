@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>社死飞行棋：派对版</title>
+    <style>
+        :root {
+            --bg-top: #a1c4fd;
+            --bg-bottom: #c2e9fb;
+            --cell-safe: #E8F5E9;
+            --cell-safe-border: #81C784;
+            --cell-action: #FFF3E0;
+            --cell-action-border: #FFB74D;
+            --cell-good: #E3F2FD;
+            --cell-good-border: #64B5F6;
+            --cell-bad: #FFEBEE;
+            --cell-bad-border: #E57373;
+            --text-dark: #2C3E50;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-top), var(--bg-bottom));
+            background-attachment: fixed;
+            color: var(--text-dark);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ---------------- 首 页 设 置 ---------------- */
+        #setup-screen {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; padding: 20px;
+        }
+
+        .setup-card {
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
+            width: 100%; max-width: 400px; padding: 30px 20px;
+            border-radius: 24px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border: 3px solid #fff; text-align: center;
+        }
+
+        .setup-card h1 { font-size: 26px; font-weight: 900; color: #4A90E2; margin-bottom: 5px; }
+        .setup-card p.subtitle { color: #7f8c8d; font-size: 14px; margin-bottom: 5px; font-weight: bold; }
+        .setup-card p.tip { color: #e74c3c; font-size: 12px; margin-bottom: 25px; font-weight: bold; background: #fad390; padding: 4px 10px; border-radius: 10px; display: inline-block;}
+
+        .player-count-btns { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .num-btn { background: #f1f2f6; border: 2px solid #dfe4ea; padding: 10px 20px; border-radius: 12px; font-size: 18px; font-weight: bold; color: #2f3542; cursor: pointer; transition: all 0.2s; }
+        .num-btn.active { background: #4A90E2; border-color: #4A90E2; color: #fff; box-shadow: 0 4px 10px rgba(74, 144, 226, 0.4); transform: translateY(-2px); }
+
+        .player-inputs { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; text-align: left; }
+        .player-row { display: flex; align-items: center; gap: 10px; background: #f8f9fa; padding: 10px; border-radius: 12px; border: 2px solid #eee; }
+        .player-row .emoji-select { font-size: 24px; }
+        .player-row input { flex: 1; border: none; background: transparent; font-size: 16px; font-weight: bold; color: #333; outline: none; }
+
+        .start-btn { background: #2ecc71; color: white; border: none; padding: 15px 0; width: 100%; border-radius: 16px; font-size: 20px; font-weight: 900; box-shadow: 0 6px 0 #27ae60; cursor: pointer; transition: all 0.1s; }
+        .start-btn:active { transform: translateY(6px); box-shadow: 0 0 0 #27ae60; }
+
+        /* ---------------- 游 戏 页 面 ---------------- */
+        #game-screen {
+            display: none; flex-direction: column; align-items: center;
+            /* 底部改为单行控制面板，内边距大幅度减小，留出更多屏幕看棋盘 */
+            padding: 30px 10px 100px 10px; 
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            column-gap: 30px; 
+            row-gap: 40px;    
+            width: 100%;
+            max-width: 360px; 
+            padding: 10px;
+        }
+
+        .cell {
+            position: relative;
+            background: #FFF;
+            border-radius: 12px;
+            aspect-ratio: 1 / 1.05; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2px;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+            border: 3px solid;
+            z-index: 2; 
+            transition: all 0.3s ease; 
+        }
+
+        .cell.path-highlight {
+            border-color: #f1c40f !important;
+            box-shadow: 0 0 20px rgba(241, 196, 15, 0.8), 0 4px 0 #f39c12 !important;
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        .cell.type-safe { background: var(--cell-safe); border-color: var(--cell-safe-border); }
+        .cell.type-action { background: var(--cell-action); border-color: var(--cell-action-border); }
+        .cell.type-good { background: var(--cell-good); border-color: var(--cell-good-border); }
+        .cell.type-bad { background: var(--cell-bad); border-color: var(--cell-bad-border); }
+        .cell.type-start { background: #FFEAA7; border-color: #FDBC04; }
+        .cell.type-end { background: #FF7675; border-color: #D63031; }
+
+        .cell-id {
+            position: absolute; top: -10px; left: -10px; font-size: 10px; font-weight: 900; color: #333; background: #FFF;
+            border: 2px solid #333; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 5;
+        }
+
+        .cell-emoji { font-size: 20px; margin-bottom: 0px; }
+        .cell-title { font-size: 10px; font-weight: 900; color: var(--text-dark); line-height: 1.1; }
+
+        .arrow-right::after, .arrow-left::after, .arrow-down::after {
+            content: ''; position: absolute; background: #FFF; border: 4px solid #BDC3C7; 
+            z-index: -1; box-shadow: 0 3px 0 #95a5a6; border-radius: 8px;
+        }
+        .arrow-right::after { right: -34px; top: 50%; width: 36px; height: 16px; transform: translateY(-50%); }
+        .arrow-left::after { left: -34px; top: 50%; width: 36px; height: 16px; transform: translateY(-50%); }
+        .arrow-down::after { bottom: -44px; left: 50%; width: 16px; height: 46px; transform: translateX(-50%); }
+
+        .players-container {
+            position: absolute; top: -15px; left: -10px; right: -10px; bottom: -10px;
+            display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 2px; pointer-events: none; z-index: 10;
+        }
+
+        .player-token {
+            position: relative;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+        }
+
+        .token-emoji {
+            font-size: 24px; background: #fff; border-radius: 50%; border: 3px solid;
+            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            margin-bottom: -5px; z-index: 2; transition: all 0.3s ease;
+        }
+
+        .token-name {
+            font-size: 9px; font-weight: 900; color: #fff; background: #333; padding: 2px 6px;
+            border-radius: 8px; border: 2px solid #fff; white-space: nowrap; z-index: 3;
+        }
+
+        .player-token.is-moving { transform: scale(1.6) translateY(-15px); z-index: 50; }
+        .player-token.is-moving .token-emoji { box-shadow: 0 15px 25px rgba(0,0,0,0.4); }
+
+        /* ---------------- 一行式极致紧凑底部控制台 ---------------- */
+        .controls {
+            position: fixed; bottom: 0; left: 0; width: 100%; 
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
+            padding: 12px 10px 20px 10px; 
+            display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 6px;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.1); border-top: 2px solid #EEE; z-index: 50;
+        }
+
+        .action-btns {
+            display: flex; gap: 6px; flex-shrink: 0;
+        }
+
+        .nav-btn { 
+            background: #f1f2f6; border: 2px solid #dfe4ea; padding: 10px 12px; 
+            border-radius: 14px; font-size: 13px; font-weight: 900; color: #576574; 
+            box-shadow: 0 3px 0 #ced6e0; cursor: pointer; transition: all 0.1s; 
+            white-space: nowrap;
+        }
+        .nav-btn:active { transform: translateY(3px); box-shadow: 0 0 0 #ced6e0; }
+
+        .status { 
+            display: flex; align-items: center; gap: 8px; flex: 1; 
+            justify-content: center; overflow: hidden;
+        }
+        
+        .status-icon { 
+            font-size: 24px; background: #f0f0f0; width: 38px; height: 38px; 
+            display: flex; align-items: center; justify-content: center; 
+            border-radius: 12px; border: 3px solid #ddd; flex-shrink: 0;
+            transition: all 0.3s;
+        }
+
+        .status-icon.active-turn {
+            animation: bottomTokenPulse 1.2s infinite;
+        }
+
+        @keyframes bottomTokenPulse {
+            0% { box-shadow: 0 0 0 0 var(--pulse-color); transform: scale(1); }
+            50% { transform: scale(1.05); }
+            70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); }
+            100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); transform: scale(1); }
+        }
+
+        .status-text-wrap {
+            display: flex; flex-direction: column; line-height: 1.2;
+            overflow: hidden; text-align: left;
+        }
+
+        .dice-btn {
+            background: #FF6B6B; color: white; border: none; width: 56px; height: 56px;
+            border-radius: 16px; font-size: 28px; box-shadow: 0 6px 0 #D63031, 0 10px 15px rgba(214, 48, 49, 0.3);
+            cursor: pointer; transition: all 0.1s; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .dice-btn:active { transform: translateY(6px); box-shadow: 0 0 0 #D63031; }
+        .dice-btn.rolling { animation: fastSpin 0.3s infinite linear; pointer-events: none; }
+
+        @keyframes fastSpin { 0% { transform: rotate(0deg) scale(1.1); } 50% { transform: rotate(180deg) scale(0.9); } 100% { transform: rotate(360deg) scale(1.1); } }
+
+        /* 气泡提示 (Toast) */
+        #toast-bubble {
+            position: fixed; top: 20px; left: 50%; transform: translate(-50%, -100%);
+            background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); padding: 12px 25px;
+            border-radius: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.25); border: 4px solid #333;
+            display: flex; align-items: center; gap: 12px; opacity: 0; z-index: 100;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events: none; width: 90%; max-width: 400px;
+        }
+        #toast-bubble.show { transform: translate(-50%, 0); opacity: 1; }
+        .toast-emoji { font-size: 32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));}
+        .toast-content { display: flex; flex-direction: column; text-align: left;}
+        .toast-title { font-size: 18px; font-weight: 900; color: #333; }
+        .toast-desc { font-size: 14px; font-weight: bold; color: #666; }
+
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen">
+        <div class="setup-card">
+            <h1>🎲 社死飞行棋：派对版</h1>
+            <p class="subtitle">朋友聚会、整蛊破冰必备</p>
+            <p class="tip">💡 提示：点击下方输入框可以自定义角色名称哦</p>
+            
+            <div class="player-count-btns">
+                <button class="num-btn active" onclick="setPlayerCount(2)">2人</button>
+                <button class="num-btn" onclick="setPlayerCount(3)">3人</button>
+                <button class="num-btn" onclick="setPlayerCount(4)">4人</button>
+            </div>
+
+            <div class="player-inputs" id="playerInputsContainer"></div>
+            <button class="start-btn" onclick="startGame()">开始游戏！</button>
+        </div>
+    </div>
+
+    <div id="game-screen">
+        <div class="board" id="board"></div>
+
+        <div class="controls">
+            <div class="action-btns">
+                <button class="nav-btn" onclick="goHome()">🏠 首页</button>
+                <button class="nav-btn" onclick="undoMove()">↩️ 撤销</button>
+            </div>
+            
+            <div class="status" id="statusBox">
+                <span class="status-icon" id="statusIcon">🐌</span>
+                <div class="status-text-wrap">
+                    <span style="font-size:10px; color:#888; font-weight: bold;">等待继续</span>
+                    <span id="statusText" style="font-size: 13px; font-weight: 900; max-width: 65px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">玩家名</span>
+                </div>
+            </div>
+            
+            <button class="dice-btn" id="diceBtn">🎲</button>
+        </div>
+    </div>
+
+    <div id="toast-bubble">
+        <div class="toast-emoji" id="toastEmoji">😲</div>
+        <div class="toast-content">
+            <div class="toast-title" id="toastTitle">事件名称</div>
+            <div class="toast-desc" id="toastDesc">这里是详细的描述信息</div>
+        </div>
+    </div>
+
+<script>
+    const boardEvents = [
+        { title: "起点", desc: "大冒险开始啦！", type: "start", emoji: "🏁" },
+        { title: "安全到达", desc: "平安无事，歇一口气", type: "safe", emoji: "🏕️" },
+        { title: "夸右边人", desc: "大声夸奖你右边的人！", type: "action", emoji: "👏" },
+        { title: "前进 2步", desc: "搭上顺风车，直接起飞！", type: "good", value: 2, emoji: "🚀" },
+        { title: "安全到达", desc: "风景不错，安全过关", type: "safe", emoji: "🧃" },
+        { title: "猜拳深蹲", desc: "找人猜拳，输的做3个深蹲！", type: "action", emoji: "✌️" },
+        { title: "退后 1步", desc: "没看清路，退一步", type: "bad", value: 1, emoji: "⚠️" },
+        { title: "学猩猩叫", desc: "锤胸口大叫三声！", type: "action", emoji: "🦍" },
+        { title: "退后 2步", desc: "踩到香蕉皮啦！", type: "bad", value: 2, emoji: "🍌" },
+        { title: "安全到达", desc: "稳扎稳打", type: "safe", emoji: "😌" },
+        { title: "单脚站立", desc: "单脚站立 10 秒钟！", type: "action", emoji: "🦩" },
+        { title: "前进 3步", desc: "发现魔法扫帚！", type: "good", value: 3, emoji: "🧹" },
+        { title: "安全到达", desc: "到处逛逛，没发生什么", type: "safe", emoji: "🚶" },
+        { title: "对视憋笑", desc: "找人对视 15 秒不许笑！", type: "action", emoji: "😶" },
+        { title: "前进 1步", desc: "精力充沛，多走一步", type: "good", value: 1, emoji: "🏃" },
+        { title: "捏肩服务", desc: "给左边的玩家捏肩膀！", type: "action", emoji: "💆" },
+        { title: "退后 3步", desc: "彻底迷路了！", type: "bad", value: 3, emoji: "🧭" },
+        { title: "安全到达", desc: "摘了一朵小花", type: "safe", emoji: "🌸" },
+        { title: "做木头人", desc: "保持现在的姿势 10 秒钟！", type: "action", emoji: "🗿" },
+        { title: "前进 2步", desc: "发现秘密捷径！", type: "good", value: 2, emoji: "🗺️" },
+        { title: "安全到达", desc: "吃个冰淇淋", type: "safe", emoji: "🍦" },
+        { title: "空中写字", desc: "用屁股在空中写自己的名字", type: "action", emoji: "🍑" },
+        { title: "停掷 1次", desc: "红灯停，下回合跳过", type: "bad", emoji: "🚦" },
+        { title: "说个糗事", desc: "真心话：说一件丢脸的事", type: "action", emoji: "🙈" },
+        { title: "安全到达", desc: "摸摸路边的小猫", type: "safe", emoji: "🐱" },
+        { title: "学机器人", desc: "下次轮到你前，说话像机器人", type: "action", emoji: "🤖" },
+        { title: "前进 2步", desc: "好运喷雾生效！", type: "good", value: 2, emoji: "✨" },
+        { title: "安全到达", desc: "坐在草地上休息", type: "safe", emoji: "🌱" },
+        { title: "大声喊叫", desc: "用最大声音喊任意玩家名字", type: "action", emoji: "📢" },
+        { title: "退后 2步", desc: "刮起大风，被吹退了", type: "bad", value: 2, emoji: "🌪️" },
+        { title: "停掷 1次", desc: "太困了，原地睡一觉", type: "bad", emoji: "💤" },
+        { title: "碰拳连击", desc: "和场上所有玩家轮流碰拳", type: "action", emoji: "🤜" },
+        { title: "前进 1步", desc: "捡到冲刺鞋！", type: "good", value: 1, emoji: "👟" },
+        { title: "安全到达", desc: "补充体力，准备冲刺", type: "safe", emoji: "🍫" },
+        { title: "学动物叫", desc: "模仿一种动物让大家猜", type: "action", emoji: "🐶" },
+        { title: "互换位置", desc: "指定一名玩家互换位置！", type: "action", emoji: "🪄" },
+        { title: "安全到达", desc: "终点就在眼前啦！", type: "safe", emoji: "👀" },
+        { title: "退后 1步", desc: "绊了一跤", type: "bad", value: 1, emoji: "🩹" },
+        { title: "安全到达", desc: "最后冲刺前的宁静", type: "safe", emoji: "🧘" },
+        { title: "大声唱歌", desc: "唱一句你最喜欢的歌", type: "action", emoji: "🎤" },
+        { title: "大赢家", desc: "太棒了！你获得了最终胜利！", type: "end", emoji: "👑" }
+    ];
+
+    const TOTAL_CELLS = boardEvents.length;
+    const COLS = 3;
+    
+    const defaultEmojis = ['🐌', '🐱', '🐒', '🪄'];
+    const defaultNames = ['奔跑的蜗牛', '爱叫的猫', '会飞的猴子', '小叮当']; 
+    const playerColors = ['#0984e3', '#e84393', '#00b894', '#fdcb6e']; 
+
+    let players = [];
+    let currentPlayerIndex = 0;
+    let selectedPlayerCount = 2;
+    
+    let historyStack = [];
+    let rollInterval, moveInterval, actionTimeout;
+    let isAnimating = false; 
+
+    // --- 首页设置 ---
+    function setPlayerCount(num) {
+        selectedPlayerCount = num;
+        document.querySelectorAll('.num-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+        renderPlayerInputs();
+    }
+
+    function renderPlayerInputs() {
+        const container = document.getElementById('playerInputsContainer');
+        container.innerHTML = '';
+        for(let i=0; i<selectedPlayerCount; i++) {
+            container.innerHTML += `
+                <div class="player-row">
+                    <div class="emoji-select">${defaultEmojis[i]}</div>
+                    <input type="text" id="p-name-${i}" placeholder="${defaultNames[i]}" value="${defaultNames[i]}">
+                </div>
+            `;
+        }
+    }
+
+    function startGame() {
+        players = [];
+        for(let i=0; i<selectedPlayerCount; i++) {
+            let name = document.getElementById(`p-name-${i}`).value.trim() || defaultNames[i];
+            players.push({
+                id: i, name: name, icon: defaultEmojis[i], color: playerColors[i], pos: 0, skipNext: false
+            });
+        }
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'flex';
+        historyStack = [];
+        currentPlayerIndex = 0;
+        initBoard();
+    }
+
+    function goHome() {
+        if(confirm("确定要结束当前游戏返回首页吗？")) location.reload();
+    }
+    renderPlayerInputs();
+
+    // --- 游戏核心 ---
+    const boardElement = document.getElementById('board');
+    const diceBtn = document.getElementById('diceBtn');
+
+    function initBoard() {
+        boardElement.innerHTML = '';
+        boardEvents.forEach((evt, i) => {
+            const row = Math.floor(i / COLS);
+            const isEvenRow = (row % 2 === 0);
+            const col = isEvenRow ? (i % COLS) : (COLS - 1 - (i % COLS));
+
+            const cell = document.createElement('div');
+            cell.className = `cell type-${evt.type}`;
+            cell.id = `cell-${i}`;
+            cell.style.gridRow = row + 1;
+            cell.style.gridColumn = col + 1;
+
+            if (i < TOTAL_CELLS - 1) {
+                if (isEvenRow && col < COLS - 1) cell.classList.add('arrow-right');
+                else if (!isEvenRow && col > 0) cell.classList.add('arrow-left');
+                else cell.classList.add('arrow-down');
+            }
+
+            let idText = i === 0 ? "起" : (i === TOTAL_CELLS - 1 ? "终" : i);
+            cell.innerHTML = `
+                <div class="cell-id">${idText}</div>
+                <div class="cell-emoji">${evt.emoji}</div>
+                <div class="cell-title">${evt.title}</div>
+                <div class="players-container" id="container-${i}"></div>
+            `;
+            boardElement.appendChild(cell);
+        });
+
+        renderTokens();
+        updateStatusUI();
+    }
+
+    function renderTokens() {
+        document.querySelectorAll('.player-token').forEach(t => t.remove());
+        players.forEach(p => {
+            const token = document.createElement('div');
+            token.className = 'player-token';
+            token.id = `token-${p.id}`;
+            token.innerHTML = `
+                <div class="token-emoji" style="border-color:${p.color};">${p.icon}</div>
+                <div class="token-name" style="background:${p.color};">${p.name}</div>
+            `;
+            document.getElementById(`container-${p.pos}`).appendChild(token);
+        });
+    }
+
+    // --- 掷骰子与动画系统 ---
+    diceBtn.addEventListener('click', () => {
+        if (isAnimating) return; 
+        
+        document.getElementById('toast-bubble').classList.remove('show');
+
+        saveState();
+        let currentPlayer = players[currentPlayerIndex];
+
+        if (currentPlayer.skipNext) {
+            currentPlayer.skipNext = false;
+            showToast("💤", "停掷 1次", `【${currentPlayer.name}】 这局只能干瞪眼休息啦！`);
+            switchPlayer();
+            return;
+        }
+
+        isAnimating = true;
+        diceBtn.classList.add('rolling');
+        
+        rollInterval = setInterval(() => {
+            diceBtn.innerText = Math.floor(Math.random() * 6) + 1;
+        }, 50);
+
+        actionTimeout = setTimeout(() => {
+            clearInterval(rollInterval);
+            diceBtn.classList.remove('rolling');
+            const steps = Math.floor(Math.random() * 6) + 1;
+            diceBtn.innerText = steps;
+            movePlayer(currentPlayer, steps, true);
+        }, 600);
+    });
+
+    function movePlayer(player, steps, isPrimaryMove) {
+        let currentPos = player.pos;
+        let targetPos = currentPos + steps;
+        if (targetPos >= TOTAL_CELLS - 1) targetPos = TOTAL_CELLS - 1; 
+
+        const tokenElement = document.getElementById(`token-${player.id}`);
+        tokenElement.classList.add('is-moving');
+
+        moveInterval = setInterval(() => {
+            if (currentPos < targetPos) {
+                currentPos++;
+                animateJump(player.id, currentPos);
+            } else if (currentPos > targetPos) {
+                currentPos--;
+                animateJump(player.id, currentPos);
+            } else {
+                clearInterval(moveInterval);
+                player.pos = currentPos;
+                
+                tokenElement.classList.remove('is-moving');
+
+                if(isPrimaryMove) {
+                    handleCellEvent(player);
+                } else {
+                    isAnimating = false;
+                    switchPlayer();
+                }
+            }
+        }, 350);
+    }
+
+    function animateJump(playerId, targetCellIndex) {
+        const token = document.getElementById(`token-${playerId}`);
+        const targetContainer = document.getElementById(`container-${targetCellIndex}`);
+        const targetCell = document.getElementById(`cell-${targetCellIndex}`);
+        
+        targetCell.classList.add('path-highlight');
+        setTimeout(() => targetCell.classList.remove('path-highlight'), 500);
+        
+        targetContainer.appendChild(token);
+    }
+
+    // --- 事件结算与气泡 ---
+    function handleCellEvent(player) {
+        const cellEvent = boardEvents[player.pos];
+        
+        actionTimeout = setTimeout(() => {
+            showToast(cellEvent.emoji, cellEvent.title, `【${player.name}】 ${cellEvent.desc}`);
+
+            if (cellEvent.type === 'good' && cellEvent.value) {
+                actionTimeout = setTimeout(() => movePlayer(player, cellEvent.value, false), 1500);
+            } 
+            else if (cellEvent.type === 'bad' && cellEvent.value) { 
+                let target = player.pos - cellEvent.value;
+                if (target < 0) target = 0;
+                actionTimeout = setTimeout(() => movePlayer(player, -cellEvent.value, false), 1500);
+            } 
+            else if (cellEvent.type === 'bad' && !cellEvent.value) { 
+                player.skipNext = true;
+                isAnimating = false;
+                switchPlayer();
+            } 
+            else if (cellEvent.title === "互换位置") {
+                actionTimeout = setTimeout(() => {
+                    let others = players.filter(p => p.id !== player.id);
+                    let targetPlayer = others[Math.floor(Math.random() * others.length)];
+                    const temp = player.pos;
+                    player.pos = targetPlayer.pos;
+                    targetPlayer.pos = temp;
+                    document.getElementById(`container-${player.pos}`).appendChild(document.getElementById(`token-${player.id}`));
+                    document.getElementById(`container-${targetPlayer.pos}`).appendChild(document.getElementById(`token-${targetPlayer.id}`));
+                    
+                    showToast("🪄", "互换完成", `【${player.name}】和【${targetPlayer.name}】互换了位置`);
+                    isAnimating = false;
+                    switchPlayer();
+                }, 1500);
+            } 
+            else if (cellEvent.type === 'end') {
+                actionTimeout = setTimeout(() => {
+                    alert(`🎉 恭喜 【${player.name}】 获得了胜利！`);
+                    location.reload(); 
+                }, 1000);
+            } 
+            else {
+                isAnimating = false;
+                switchPlayer();
+            }
+        }, 300);
+    }
+
+    function switchPlayer() {
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+        updateStatusUI();
+        diceBtn.innerText = "🎲";
+    }
+
+    function updateStatusUI() {
+        const p = players[currentPlayerIndex];
+        
+        const statusIcon = document.getElementById('statusIcon');
+        statusIcon.innerText = p.icon;
+        statusIcon.style.borderColor = p.color;
+        statusIcon.style.setProperty('--pulse-color', p.color);
+        
+        statusIcon.classList.remove('active-turn');
+        void statusIcon.offsetWidth; 
+        statusIcon.classList.add('active-turn');
+
+        document.getElementById('statusText').innerText = p.name;
+        document.getElementById('statusText').style.color = p.color;
+    }
+
+    function showToast(emoji, title, desc) {
+        const bubble = document.getElementById('toast-bubble');
+        document.getElementById('toastEmoji').innerText = emoji;
+        document.getElementById('toastTitle').innerText = title;
+        document.getElementById('toastDesc').innerText = desc;
+        
+        if(["退后 1步", "退后 2步", "退后 3步", "停掷 1次"].includes(title)){
+            bubble.style.borderColor = "#e74c3c";
+        } else if (title.includes("前进") || title === "互换完成") {
+            bubble.style.borderColor = "#3498db";
+        } else if (title === "安全到达") {
+            bubble.style.borderColor = "#2ecc71";
+        } else {
+            bubble.style.borderColor = "#f39c12"; 
+        }
+
+        bubble.classList.add('show');
+    }
+
+    // --- 撤销 ---
+    function saveState() {
+        historyStack.push({ players: JSON.parse(JSON.stringify(players)), turn: currentPlayerIndex });
+    }
+
+    function undoMove() {
+        if (historyStack.length === 0) {
+            alert("已经是第一步啦，没有可以撤销的操作！");
+            return;
+        }
+
+        isAnimating = false;
+        clearInterval(rollInterval); clearInterval(moveInterval); clearTimeout(actionTimeout);
+        
+        diceBtn.classList.remove('rolling'); diceBtn.innerText = "🎲";
+        document.getElementById('toast-bubble').classList.remove('show');
+
+        const lastState = historyStack.pop();
+        players = lastState.players; currentPlayerIndex = lastState.turn;
+
+        renderTokens(); updateStatusUI();
+    }
+</script>
+</body>
+</html>
